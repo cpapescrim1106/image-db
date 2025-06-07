@@ -15,4 +15,4 @@ COPY . .
 EXPOSE 8501
 
 # Command to run the app in a containerized environment
-CMD ["streamlit", "run", "dashboard.py", "--server.port=8501", "--server.headless=true", "--server.enableCORS=false"] 
+CMD ["streamlit", "run", "dashboard.py", "--server.port=8501", "--server.headless=true", "--server.address=0.0.0.0"] 
