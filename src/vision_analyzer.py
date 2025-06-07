@@ -13,19 +13,18 @@ logger = logging.getLogger(__name__)
 client = None
 init_error = None
 
-# Initialize OpenAI for 0.28 version
+# Initialize OpenAI client (modern version)
 try:
     api_key = config.get_openai_api_key()
-    logger.info(f"Initializing OpenAI with API key: {api_key[:10]}...")
+    logger.info(f"Initializing OpenAI client with API key: {api_key[:10]}...")
     
-    # For version 0.28, just set the API key
-    openai.api_key = api_key
-    client = True  # Just a flag to indicate success
+    # Use the modern OpenAI client initialization
+    client = openai.OpenAI(api_key=api_key)
     
-    logger.info("OpenAI initialized successfully")
+    logger.info("OpenAI client initialized successfully")
 except Exception as e:
     init_error = str(e)
-    logger.error(f"Error initializing OpenAI: {e}")
+    logger.error(f"Error initializing OpenAI client: {e}")
     client = None
 
 def encode_image(image_path):
@@ -65,7 +64,7 @@ def analyze_image_with_gpt(image_path):
     debug_info = []
     
     if not client:
-        error_msg = f"OpenAI not initialized. Init error: {init_error}"
+        error_msg = f"OpenAI client not initialized. Init error: {init_error}"
         debug_info.append(error_msg)
         logger.error(error_msg)
         return None, debug_info
@@ -79,8 +78,8 @@ def analyze_image_with_gpt(image_path):
         
         debug_info.append("🚀 Making OpenAI API call...")
         logger.info("Making OpenAI API call...")
-        response = openai.ChatCompletion.create(
-            model="gpt-4-vision-preview",
+        response = client.chat.completions.create(
+            model="gpt-4o",
             messages=[
                 {
                     "role": "system", 
@@ -100,6 +99,7 @@ def analyze_image_with_gpt(image_path):
                     ],
                 }
             ],
+            response_format={"type": "json_object"},
             temperature=0.7,
             max_tokens=2000
         )
