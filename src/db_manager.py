@@ -56,6 +56,17 @@ def get_all_images():
     if not os.path.exists(DB_PATH):
         return pd.DataFrame() # Return empty dataframe if DB doesn't exist
     conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query("SELECT image_id, style_name, image_type, image_path FROM images", conn)
+    df = pd.read_sql_query("SELECT * FROM images ORDER BY image_id DESC", conn)
     conn.close()
-    return df 
+    return df
+
+def get_image_details(image_id):
+    """Retrieves detailed information for a specific image."""
+    if not os.path.exists(DB_PATH):
+        return None
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM images WHERE image_id = ?", (image_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result 

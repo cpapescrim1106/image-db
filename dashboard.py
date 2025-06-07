@@ -1,6 +1,7 @@
 import streamlit as st
 from src import db_manager, file_manager, vision_analyzer
 import json
+import os
 
 # --- Page Config ---
 st.set_page_config(page_title="Image Catalog", layout="wide")
@@ -25,12 +26,69 @@ with col1:
 
     if uploaded_file:
         st.image(uploaded_file, caption="Uploaded Image", use_column_width=True)
-
-        if st.button("🤖 Analyze with AI", use_container_width=True, type="primary"):
-            with st.spinner("AI is analyzing the image... This may take a moment."):
-                # Save the file to a temporary location for analysis
-                file_path, _ = file_manager.save_uploaded_file(uploaded_file)
-                st.session_state.analysis_result = vision_analyzer.analyze_image_with_gpt(file_path)
+        
+        # Add buttons for AI analysis and manual input
+        col1a, col1b = st.columns(2)
+        
+        with col1a:
+            if st.button("🤖 Analyze with AI", use_container_width=True, type="primary"):
+                with st.spinner("AI is analyzing the image... This may take a moment."):
+                    try:
+                        # Save the file first
+                        file_path, _ = file_manager.save_uploaded_file(uploaded_file)
+                        st.success(f"✅ Image saved to: {file_path}")
+                        
+                        # Then analyze with AI
+                        result = vision_analyzer.analyze_image_with_gpt(file_path)
+                        if result:
+                            st.session_state.analysis_result = result
+                            st.success("🎉 AI analysis completed!")
+                        else:
+                            st.error("❌ AI analysis failed. Please check your OpenAI API key.")
+                    except Exception as e:
+                        st.error(f"❌ Error: {str(e)}")
+        
+        with col1b:
+            if st.button("📝 Manual Input", use_container_width=True):
+                try:
+                    # Save the file and setup manual input
+                    file_path, _ = file_manager.save_uploaded_file(uploaded_file)
+                    st.success(f"✅ Image saved to: {file_path}")
+                    
+                    # Create empty template for manual input
+                    st.session_state.analysis_result = {
+                        'image_id': f"IMG-{uploaded_file.name.split('.')[0]}",
+                        'image_type': 'Real Photograph',
+                        'style_name': '',
+                        'composition_structure': '',
+                        'color_palette': '',
+                        'lighting': '',
+                        'texture_finish': '',
+                        'geometry_flow': '',
+                        'primary_emotional_tone': '',
+                        'emotional_keyword_tags': '',
+                        'narrative_metaphor': '',
+                        'ai_generation_prompt': 'N/A',
+                        'recreation_guidelines': '',
+                        'recommended_use_cases': ''
+                    }
+                    st.info("📝 Manual input mode activated. Fill in the fields below.")
+                except Exception as e:
+                    st.error(f"❌ Error saving image: {str(e)}")
+                    
+        # Add copy/paste section
+        if uploaded_file:
+            with st.expander("📋 Quick Copy/Paste Input"):
+                st.markdown("**Paste JSON data here for quick input:**")
+                json_input = st.text_area("Paste metadata JSON:", height=100, placeholder='{"image_id": "IMG-001", "style_name": "Modern Minimalist", ...}')
+                if st.button("🔄 Load from JSON"):
+                    try:
+                        import json
+                        parsed_data = json.loads(json_input)
+                        st.session_state.analysis_result = parsed_data
+                        st.success("✅ Data loaded from JSON!")
+                    except Exception as e:
+                        st.error(f"❌ Invalid JSON: {str(e)}")
 
 with col2:
     st.header("2. Review & Save Metadata")
@@ -91,6 +149,31 @@ with col2:
 st.header("📚 Image Catalog")
 catalog_df = db_manager.get_all_images()
 if not catalog_df.empty:
-    st.dataframe(catalog_df, use_container_width=True)
+    st.markdown(f"**Total Images: {len(catalog_df)}**")
+    
+    # Display images in a grid
+    cols = st.columns(3)
+    for idx, row in catalog_df.iterrows():
+        col_idx = idx % 3
+        with cols[col_idx]:
+            # Try to display the image
+            try:
+                if os.path.exists(row['image_path']):
+                    st.image(row['image_path'], caption=f"{row['image_id']}", use_column_width=True)
+                else:
+                    st.info(f"📷 {row['image_id']}")
+            except:
+                st.info(f"📷 {row['image_id']}")
+            
+            st.markdown(f"**Style:** {row['style_name']}")
+            st.markdown(f"**Type:** {row['image_type']}")
+            
+            # Add expandable details
+            with st.expander("View Details"):
+                st.markdown(f"**Path:** `{row['image_path']}`")
+    
+    # Also show the dataframe for easy browsing
+    with st.expander("📊 View as Table"):
+        st.dataframe(catalog_df, use_container_width=True)
 else:
     st.write("The catalog is empty. Upload and save an image to see it here.") 
