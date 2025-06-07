@@ -5,6 +5,9 @@ import pandas as pd
 # This path points to the persistent volume inside the container
 DB_PATH = "/app/data/catalog.db"
 
+# Ensure the data directory exists
+os.makedirs("/app/data", exist_ok=True)
+
 def create_table():
     """Creates the images table if it doesn't exist, based on the full schema."""
     conn = sqlite3.connect(DB_PATH)
