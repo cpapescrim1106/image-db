@@ -3,6 +3,7 @@ import json
 import openai
 from src import config
 import logging
+import os
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -16,7 +17,11 @@ init_error = None
 try:
     api_key = config.get_openai_api_key()
     logger.info(f"Initializing OpenAI client with API key: {api_key[:10]}...")
-    client = openai.OpenAI(api_key=api_key)
+    
+    # Simple initialization without extra parameters
+    openai.api_key = api_key
+    client = openai
+    
     logger.info("OpenAI client initialized successfully")
 except Exception as e:
     init_error = str(e)
@@ -74,8 +79,8 @@ def analyze_image_with_gpt(image_path):
         
         debug_info.append("🚀 Making OpenAI API call...")
         logger.info("Making OpenAI API call...")
-        response = client.chat.completions.create(
-            model="gpt-4o",
+        response = client.ChatCompletion.create(
+            model="gpt-4-vision-preview",
             messages=[
                 {
                     "role": "system", 
@@ -95,7 +100,6 @@ def analyze_image_with_gpt(image_path):
                     ],
                 }
             ],
-            response_format={"type": "json_object"},
             temperature=0.7,
             max_tokens=2000
         )
@@ -106,11 +110,44 @@ def analyze_image_with_gpt(image_path):
         debug_info.append(f"📄 Raw response preview: {content[:200]}...")
         logger.info(f"Raw response: {content[:200]}...")
         
-        # Parse the JSON response
-        analysis_dict = json.loads(content)
-        debug_info.append("🎉 JSON parsed successfully")
-        logger.info("JSON parsed successfully")
-        return analysis_dict, debug_info
+        # Try to parse JSON from the response
+        try:
+            analysis_dict = json.loads(content)
+            debug_info.append("🎉 JSON parsed successfully")
+            logger.info("JSON parsed successfully")
+            return analysis_dict, debug_info
+        except json.JSONDecodeError:
+            # If it's not valid JSON, try to extract JSON from the text
+            import re
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                try:
+                    analysis_dict = json.loads(json_match.group())
+                    debug_info.append("🎉 JSON extracted and parsed successfully")
+                    logger.info("JSON extracted and parsed successfully")
+                    return analysis_dict, debug_info
+                except:
+                    pass
+            
+            # If we can't parse JSON, create a structured response manually
+            debug_info.append("⚠️ Could not parse JSON, creating manual structure")
+            analysis_dict = {
+                'image_id': f"IMG-{os.path.basename(image_path).split('.')[0]}",
+                'image_type': 'Real Photograph',
+                'style_name': 'AI Analysis Result',
+                'composition_structure': content[:200] + "...",
+                'color_palette': 'Unable to analyze',
+                'lighting': 'Unable to analyze',
+                'texture_finish': 'Unable to analyze',
+                'geometry_flow': 'Unable to analyze',
+                'primary_emotional_tone': 'Unable to analyze',
+                'emotional_keyword_tags': 'ai-generated, analysis',
+                'narrative_metaphor': content,
+                'ai_generation_prompt': 'N/A',
+                'recreation_guidelines': 'See narrative section for AI response',
+                'recommended_use_cases': 'General use'
+            }
+            return analysis_dict, debug_info
         
     except json.JSONDecodeError as e:
         error_msg = f"❌ JSON parsing error: {e}"
