@@ -2,15 +2,25 @@ import base64
 import json
 import openai
 from src import config
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Global variable to store initialization status
+client = None
+init_error = None
 
 # Initialize OpenAI client
 try:
     api_key = config.get_openai_api_key()
-    print(f"Initializing OpenAI client with API key: {api_key[:10]}...")
+    logger.info(f"Initializing OpenAI client with API key: {api_key[:10]}...")
     client = openai.OpenAI(api_key=api_key)
-    print("OpenAI client initialized successfully")
+    logger.info("OpenAI client initialized successfully")
 except Exception as e:
-    print(f"Error initializing OpenAI client: {e}")
+    init_error = str(e)
+    logger.error(f"Error initializing OpenAI client: {e}")
     client = None
 
 def encode_image(image_path):
@@ -45,17 +55,25 @@ def get_system_prompt():
 def analyze_image_with_gpt(image_path):
     """
     Analyzes an image using GPT-4o and returns a structured dictionary.
+    Returns tuple: (result_dict, debug_info)
     """
+    debug_info = []
+    
     if not client:
-        print("OpenAI client not initialized")
-        return None
+        error_msg = f"OpenAI client not initialized. Init error: {init_error}"
+        debug_info.append(error_msg)
+        logger.error(error_msg)
+        return None, debug_info
         
     try:
-        print(f"Encoding image: {image_path}")
+        debug_info.append(f"🔍 Encoding image: {image_path}")
+        logger.info(f"Encoding image: {image_path}")
         base64_image = encode_image(image_path)
-        print(f"Image encoded successfully, size: {len(base64_image)} characters")
+        debug_info.append(f"✅ Image encoded successfully, size: {len(base64_image)} characters")
+        logger.info(f"Image encoded successfully, size: {len(base64_image)} characters")
         
-        print("Making OpenAI API call...")
+        debug_info.append("🚀 Making OpenAI API call...")
+        logger.info("Making OpenAI API call...")
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -82,21 +100,31 @@ def analyze_image_with_gpt(image_path):
             max_tokens=2000
         )
         
-        print("API call successful, parsing response...")
+        debug_info.append("✅ API call successful, parsing response...")
+        logger.info("API call successful, parsing response...")
         content = response.choices[0].message.content
-        print(f"Raw response: {content[:200]}...")
+        debug_info.append(f"📄 Raw response preview: {content[:200]}...")
+        logger.info(f"Raw response: {content[:200]}...")
         
         # Parse the JSON response
         analysis_dict = json.loads(content)
-        print("JSON parsed successfully")
-        return analysis_dict
+        debug_info.append("🎉 JSON parsed successfully")
+        logger.info("JSON parsed successfully")
+        return analysis_dict, debug_info
         
     except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {e}")
-        print(f"Raw content: {content}")
-        return None
+        error_msg = f"❌ JSON parsing error: {e}"
+        debug_info.append(error_msg)
+        debug_info.append(f"Raw content: {content}")
+        logger.error(error_msg)
+        logger.error(f"Raw content: {content}")
+        return None, debug_info
     except Exception as e:
-        print(f"OpenAI API error: {type(e).__name__}: {e}")
+        error_msg = f"❌ OpenAI API error: {type(e).__name__}: {e}"
+        debug_info.append(error_msg)
+        logger.error(error_msg)
         import traceback
-        print(f"Full traceback: {traceback.format_exc()}")
-        return None 
+        traceback_str = traceback.format_exc()
+        debug_info.append(f"Full traceback: {traceback_str}")
+        logger.error(f"Full traceback: {traceback_str}")
+        return None, debug_info 

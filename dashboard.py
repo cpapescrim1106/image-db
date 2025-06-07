@@ -40,13 +40,20 @@ with col1:
                         
                         # Then analyze with AI
                         st.info("🔄 Sending image to OpenAI for analysis...")
-                        result = vision_analyzer.analyze_image_with_gpt(file_path)
+                        result, debug_info = vision_analyzer.analyze_image_with_gpt(file_path)
+                        
+                        # Show debug information
+                        with st.expander("🔍 Debug Information", expanded=True):
+                            for info in debug_info:
+                                st.write(info)
+                        
                         if result:
                             st.session_state.analysis_result = result
                             st.success("🎉 AI analysis completed!")
-                            st.json(result)  # Show the result for debugging
+                            with st.expander("📄 Raw AI Response"):
+                                st.json(result)
                         else:
-                            st.error("❌ AI analysis failed. Check the CapRover logs for detailed error information.")
+                            st.error("❌ AI analysis failed. See debug information above for details.")
                             st.info("💡 Try using Manual Input instead, or check your OpenAI API key and credits.")
                     except Exception as e:
                         st.error(f"❌ Error: {str(e)}")
