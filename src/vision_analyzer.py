@@ -4,6 +4,7 @@ import openai
 from src import config
 import logging
 import os
+import httpx  # Make sure httpx is imported
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -13,37 +14,26 @@ logger = logging.getLogger(__name__)
 client = None
 init_error = None
 
-# Initialize OpenAI client with explicit configuration
+# --- Simplified and Corrected OpenAI Client Initialization ---
 try:
     api_key = config.get_openai_api_key()
-    logger.info(f"Initializing OpenAI client with API key: {api_key[:10]}...")
+    logger.info("Initializing OpenAI client...")
     
-    # Try different initialization approaches to avoid proxies error
-    try:
-        # Method 1: Basic initialization
-        client = openai.OpenAI(api_key=api_key)
-        logger.info("OpenAI client initialized with basic method")
-    except Exception as e1:
-        logger.warning(f"Basic method failed: {e1}")
-        try:
-            # Method 2: Explicit empty configuration
-            client = openai.OpenAI(
-                api_key=api_key,
-                http_client=None
-            )
-            logger.info("OpenAI client initialized with explicit config")
-        except Exception as e2:
-            logger.warning(f"Explicit config failed: {e2}")
-            # Method 3: Set global api_key (fallback to older style)
-            openai.api_key = api_key
-            client = openai
-            logger.info("OpenAI initialized with global api_key method")
+    # Explicitly create an httpx client, disabling environment proxies to prevent errors.
+    http_client = httpx.Client(proxies="")
     
-    logger.info("OpenAI client initialized successfully")
+    # Initialize the OpenAI client with the API key and the custom http_client.
+    client = openai.OpenAI(
+        api_key=api_key,
+        http_client=http_client
+    )
+    
+    logger.info("OpenAI client initialized successfully.")
 except Exception as e:
     init_error = str(e)
     logger.error(f"Error initializing OpenAI client: {e}")
     client = None
+# --- End of Initialization Block ---
 
 def encode_image(image_path):
     """Encodes a local image file into a base64 string."""
@@ -97,61 +87,33 @@ def analyze_image_with_gpt(image_path):
         debug_info.append("🚀 Making OpenAI API call...")
         logger.info("Making OpenAI API call...")
         
-        # Handle both modern client and legacy global api_key approaches
         try:
-            # Try modern client approach first
-            if hasattr(client, 'chat') and hasattr(client.chat, 'completions'):
-                response = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[
-                        {
-                            "role": "system", 
-                            "content": get_system_prompt()
-                        },
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": "Please analyze this image and provide the JSON output."},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:image/jpeg;base64,{base64_image}",
-                                        "detail": "high"
-                                    }
-                                },
-                            ],
-                        }
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.7,
-                    max_tokens=2000
-                )
-            else:
-                # Fallback to legacy global api approach
-                response = openai.ChatCompletion.create(
-                    model="gpt-4o",
-                    messages=[
-                        {
-                            "role": "system", 
-                            "content": get_system_prompt()
-                        },
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": "Please analyze this image and provide the JSON output."},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:image/jpeg;base64,{base64_image}",
-                                        "detail": "high"
-                                    }
-                                },
-                            ],
-                        }
-                    ],
-                    temperature=0.7,
-                    max_tokens=2000
-                )
+            # This is the modern and correct way to call the API
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": get_system_prompt()
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Please analyze this image and provide the JSON output."},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}",
+                                    "detail": "high"
+                                }
+                            },
+                        ],
+                    }
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.7,
+                max_tokens=2000
+            )
         except Exception as api_error:
             debug_info.append(f"❌ API call failed: {api_error}")
             raise api_error
