@@ -13,13 +13,31 @@ logger = logging.getLogger(__name__)
 client = None
 init_error = None
 
-# Initialize OpenAI client (modern version)
+# Initialize OpenAI client with explicit configuration
 try:
     api_key = config.get_openai_api_key()
     logger.info(f"Initializing OpenAI client with API key: {api_key[:10]}...")
     
-    # Use the modern OpenAI client initialization
-    client = openai.OpenAI(api_key=api_key)
+    # Try different initialization approaches to avoid proxies error
+    try:
+        # Method 1: Basic initialization
+        client = openai.OpenAI(api_key=api_key)
+        logger.info("OpenAI client initialized with basic method")
+    except Exception as e1:
+        logger.warning(f"Basic method failed: {e1}")
+        try:
+            # Method 2: Explicit empty configuration
+            client = openai.OpenAI(
+                api_key=api_key,
+                http_client=None
+            )
+            logger.info("OpenAI client initialized with explicit config")
+        except Exception as e2:
+            logger.warning(f"Explicit config failed: {e2}")
+            # Method 3: Set global api_key (fallback to older style)
+            openai.api_key = api_key
+            client = openai
+            logger.info("OpenAI initialized with global api_key method")
     
     logger.info("OpenAI client initialized successfully")
 except Exception as e:
@@ -78,31 +96,65 @@ def analyze_image_with_gpt(image_path):
         
         debug_info.append("🚀 Making OpenAI API call...")
         logger.info("Making OpenAI API call...")
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system", 
-                    "content": get_system_prompt()
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Please analyze this image and provide the JSON output."},
+        
+        # Handle both modern client and legacy global api_key approaches
+        try:
+            # Try modern client approach first
+            if hasattr(client, 'chat') and hasattr(client.chat, 'completions'):
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
                         {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}",
-                                "detail": "high"
-                            }
+                            "role": "system", 
+                            "content": get_system_prompt()
                         },
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "Please analyze this image and provide the JSON output."},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{base64_image}",
+                                        "detail": "high"
+                                    }
+                                },
+                            ],
+                        }
                     ],
-                }
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.7,
-            max_tokens=2000
-        )
+                    response_format={"type": "json_object"},
+                    temperature=0.7,
+                    max_tokens=2000
+                )
+            else:
+                # Fallback to legacy global api approach
+                response = openai.ChatCompletion.create(
+                    model="gpt-4o",
+                    messages=[
+                        {
+                            "role": "system", 
+                            "content": get_system_prompt()
+                        },
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "Please analyze this image and provide the JSON output."},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{base64_image}",
+                                        "detail": "high"
+                                    }
+                                },
+                            ],
+                        }
+                    ],
+                    temperature=0.7,
+                    max_tokens=2000
+                )
+        except Exception as api_error:
+            debug_info.append(f"❌ API call failed: {api_error}")
+            raise api_error
         
         debug_info.append("✅ API call successful, parsing response...")
         logger.info("API call successful, parsing response...")
