@@ -5,7 +5,10 @@ from src import config
 
 # Initialize OpenAI client
 try:
-    client = openai.OpenAI(api_key=config.get_openai_api_key())
+    api_key = config.get_openai_api_key()
+    print(f"Initializing OpenAI client with API key: {api_key[:10]}...")
+    client = openai.OpenAI(api_key=api_key)
+    print("OpenAI client initialized successfully")
 except Exception as e:
     print(f"Error initializing OpenAI client: {e}")
     client = None
@@ -43,14 +46,21 @@ def analyze_image_with_gpt(image_path):
     """
     Analyzes an image using GPT-4o and returns a structured dictionary.
     """
-    base64_image = encode_image(image_path)
-    
+    if not client:
+        print("OpenAI client not initialized")
+        return None
+        
     try:
+        print(f"Encoding image: {image_path}")
+        base64_image = encode_image(image_path)
+        print(f"Image encoded successfully, size: {len(base64_image)} characters")
+        
+        print("Making OpenAI API call...")
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {
-                    "role": "system",
+                    "role": "system", 
                     "content": get_system_prompt()
                 },
                 {
@@ -59,7 +69,10 @@ def analyze_image_with_gpt(image_path):
                         {"type": "text", "text": "Please analyze this image and provide the JSON output."},
                         {
                             "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}",
+                                "detail": "high"
+                            }
                         },
                     ],
                 }
@@ -68,9 +81,22 @@ def analyze_image_with_gpt(image_path):
             temperature=0.7,
             max_tokens=2000
         )
-        # The API in JSON mode returns a string that needs to be parsed
-        analysis_dict = json.loads(response.choices[0].message.content)
+        
+        print("API call successful, parsing response...")
+        content = response.choices[0].message.content
+        print(f"Raw response: {content[:200]}...")
+        
+        # Parse the JSON response
+        analysis_dict = json.loads(content)
+        print("JSON parsed successfully")
         return analysis_dict
+        
+    except json.JSONDecodeError as e:
+        print(f"JSON parsing error: {e}")
+        print(f"Raw content: {content}")
+        return None
     except Exception as e:
-        print(f"An error occurred with the OpenAI API: {e}")
+        print(f"OpenAI API error: {type(e).__name__}: {e}")
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
         return None 
