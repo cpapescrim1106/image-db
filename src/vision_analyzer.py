@@ -3,7 +3,12 @@ import json
 import openai
 from src import config
 
-client = openai.OpenAI(api_key=config.get_openai_api_key())
+# Initialize OpenAI client
+try:
+    client = openai.OpenAI(api_key=config.get_openai_api_key())
+except Exception as e:
+    print(f"Error initializing OpenAI client: {e}")
+    client = None
 
 def encode_image(image_path):
     """Encodes a local image file into a base64 string."""
